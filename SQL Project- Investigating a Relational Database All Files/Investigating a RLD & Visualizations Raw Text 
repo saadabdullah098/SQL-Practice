@@ -1,0 +1,163 @@
+**We want to understand more about the movies that families are watching. The following categories are considered family movies: Animation, Children, Classics, Comedy, Family and Music.** 
+
+*** Create a query that lists each movie, the film category it is classified in, and the number of times it has been rented out.***
+
+SELECT DISTINCT title, name, 
+COUNT(rental_id) OVER (PARTITION BY title) AS rental_count
+FROM
+	(SELECT f.title title, c.name name, r.rental_id rental_id
+	FROM film f 
+	JOIN film_category fc ON fc.film_id = f.film_id
+	JOIN category c ON c.category_id = fc.category_id
+	JOIN inventory i ON i.film_id = f.film_id
+	JOIN rental r ON r.inventory_id = i.inventory_id
+	WHERE c.name IN ('Animation','Children','Classics','Comedy','Family','Music'))
+ORDER BY 2,1;
+
+
+OR
+
+
+SELECT f.title title, c.name name, COUNT(r.rental_id) rental_count
+FROM film f
+JOIN film_category fc ON fc.film_id = f.film_id
+JOIN category c ON c.category_id = fc.category_id
+JOIN inventory i ON i.film_id = f.film_id
+JOIN rental r ON r.inventory_id = i.inventory_id
+GROUP BY 1,2
+HAVING name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+ORDER BY 2,1;
+
+
+
+How many movies were rented from each category?
+
+SELECT DISTINCT name,
+SUM(rental_count) OVER (PARTITION BY name)
+FROM
+	(SELECT f.title title, c.name name, COUNT(r.rental_id) rental_count
+	FROM film f
+	JOIN film_category fc ON fc.film_id = f.film_id
+	JOIN category c ON c.category_id = fc.category_id
+	JOIN inventory i ON i.film_id = f.film_id
+	JOIN rental r ON r.inventory_id = i.inventory_id
+	GROUP BY 1,2
+	HAVING name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+	ORDER BY 2,1)
+ORDER BY 2 DESC;
+
+
+Now we need to know how the length of rental duration of these family-friendly movies compares to the duration that all movies are rented for.
+Provide a table with the movie titles and divide them into 4 levels (first_quarter, second_quarter, third_quarter, and final_quarter) based on the quartiles (25%, 50%, 75%) of the rental duration for movies across all categories? 
+
+SELECT title, category, 
+CASE WHEN quartile = 1 THEN 'first_quartile'
+WHEN quartile = 2 THEN 'second_quartile'
+WHEN quartile = 3 THEN 'third_quartile' ELSE 'fourth_quartile'
+END AS rental_quartiles
+FROM
+	(SELECT title, c.name category, rental_duration,
+	NTILE (4) OVER(ORDER BY rental_duration) AS quartile
+	FROM film f
+	JOIN film_category fc ON fc.film_id = f.film_id
+	JOIN category c ON c.category_id = fc.category_id
+	WHERE name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music'));
+
+
+Provide a table with the family-friendly film category, each of the quartiles, and the corresponding count of movies within each combination of film category for each corresponding rental duration category.
+
+SELECT t1.name, t1.quartile rental_duration_quartile, COUNT(*)
+FROM
+	(SELECT title, rental_duration, c.name name,
+	NTILE (4) OVER(ORDER BY rental_duration) AS quartile
+	FROM film f
+	JOIN film_category fc ON fc.film_id = f.film_id
+	JOIN category c ON c.category_id = fc.category_id
+	WHERE name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+	)t1
+GROUP BY 1,2
+ORDER BY 1,2;
+
+
+
+**We want to find out how the two stores compare in their count of rental orders during every month for all the years we have data for.** 
+
+**Write a query that returns the store ID for the store, the year and month and the number of rental orders each store has fulfilled for that month.**
+
+
+SELECT s.store_id, DATE_PART('year',r.rental_date) rental_year, 
+DATE_PART('month',r.rental_date) rental_month, COUNT(*) number_of_rentals
+FROM store s
+JOIN customer c ON c.store_id = s.store_id
+JOIN rental r ON r.customer_id = c.customer_id
+GROUP BY 1,2,3
+ORDER BY 1,4 DESC;
+
+
+**We would like to know who were our top 10 paying customers, how many payments they made on a monthly basis during 2007, and what was the amount of the monthly payments.**
+
+SELECT DATE_TRUNC('month',p.payment_date) date, 
+CONCAT(c.first_name,' ',c.last_name) name, 
+COUNT(p.amount) payment_count_per_month, 
+SUM(p.amount) total_payment_per_month
+FROM customer c
+JOIN payment p ON p.customer_id = c.customer_id
+WHERE CONCAT(c.first_name,' ',c.last_name) IN
+
+	(SELECT t1.name FROM
+	   (SELECT CONCAT(c.first_name,' ',c.last_name) name,
+			SUM(p.amount) payment
+			FROM customer c
+			JOIN payment p ON p.customer_id = c.customer_id
+			GROUP BY 1
+			ORDER BY 2 DESC
+			LIMIT 10)t1)
+		
+GROUP BY 1,2
+HAVING DATE_TRUNC('month',p.payment_date) BETWEEN '2007-01-01' AND '2008-01-01' 
+ORDER BY 2,1;
+
+
+
+**Finally, for each of these top 10 paying customers, we would like to find out the difference across their monthly payments during 2007.** 
+
+**Write a query to compare the payment amounts in each successive month. Repeat this for each of these 10 paying customers.**
+
+WITH t2 AS
+	(SELECT DATE_TRUNC('month',p.payment_date) date, 
+	CONCAT(c.first_name,' ',c.last_name) name,
+	SUM(p.amount) total_payment_per_month,
+	LAG(SUM(p.amount)) OVER(PARTITION BY CONCAT(c.first_name,' ',c.last_name)  ORDER BY DATE_TRUNC('month',p.payment_date)) AS previous_month,
+	SUM(p.amount) - LAG(SUM(p.amount)) OVER(PARTITION BY CONCAT(c.first_name,' ',c.last_name)  ORDER BY DATE_TRUNC('month',p.payment_date)) AS monthly_payment_difference
+
+	FROM customer c
+	JOIN payment p ON p.customer_id = c.customer_id
+	WHERE CONCAT(c.first_name,' ',c.last_name) IN
+
+		(SELECT t1.name FROM
+		   (SELECT CONCAT(c.first_name,' ',c.last_name) name,
+				SUM(p.amount) payment
+				FROM customer c
+				JOIN payment p ON p.customer_id = c.customer_id
+				GROUP BY 1
+				ORDER BY 2 DESC
+				LIMIT 10)t1)
+
+	GROUP BY 1,2
+	HAVING DATE_TRUNC('month',p.payment_date) BETWEEN '2007-01-01' AND '2008-01-01' 
+	ORDER BY 2,1)
+	
+SELECT date,name, total_payment_per_month, 
+COALESCE(previous_month,0) previous_month, 
+COALESCE(monthly_payment_difference,0) monthly_payment_difference
+FROM t2
+
+
+Also, it will be tremendously helpful if you can identify the customer name who paid the most difference in terms of payments.
+
+SELECT date,name, total_payment_per_month, 
+COALESCE(previous_month,0) previous_month, 
+COALESCE(monthly_payment_difference,0) monthly_payment_difference
+FROM t2
+ORDER BY 5 DESC
+LIMIT 1;

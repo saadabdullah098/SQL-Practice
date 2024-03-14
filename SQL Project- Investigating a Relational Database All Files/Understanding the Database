@@ -1,0 +1,77 @@
+Let's start with creating a table that provides the following details: actor's first and last name combined as full_name, film title, film description and length of the movie.
+
+SELECT CONCAT(first_name,' ',last_name) AS full_name, f.title, 
+f.description, f.length
+FROM actor a
+JOIN film_actor fa ON a.actor_id = fa.actor_id
+JOIN film f ON fa.film_id = f.film_id;
+
+How many rows are there in the table?
+5462
+
+
+Write a query that creates a list of actors and movies where the movie length was more than 60 minutes. How many rows are there in this query result? 4900
+
+SELECT CONCAT(first_name,' ',last_name) AS full_name, f.title, f.length
+FROM actor a
+JOIN film_actor fa ON a.actor_id = fa.actor_id
+JOIN film f ON fa.film_id = f.film_id
+WHERE f.length > 60
+ORDER BY length;
+
+Write a query that captures the actor id, full name of the actor, and counts the number of movies each actor has made. 
+* (HINT: Think about whether you should group by actor id or the full name of the actor.*) Identify the actor who has made the maximum number movies: Gina Degeneres
+
+SELECT CONCAT(first_name,' ',last_name) AS full_name, fa.actor_id, COUNT(*)
+FROM actor a
+JOIN film_actor fa ON a.actor_id = fa.actor_id
+GROUP BY 1,2
+ORDER BY 3 DESC;
+
+
+
+Write a query that displays a table with 4 columns: actor's full name, film title, length of movie, and a column name "filmlen_groups" that classifies movies based on their length. Filmlen_groups should include 4 categories: 1 hour or less, Between 1-2 hours, Between 2-3 hours, More than 3 hours.
+
+
+SELECT CONCAT(first_name,' ',last_name) AS full_name, f.title, 
+f.length, 
+CASE WHEN f.length <= 60 THEN '1 hour or less'
+       WHEN f.length > 60 AND f.length <= 120 THEN 'Between 1-2 hours'
+       WHEN f.length > 120 AND f.length <= 180 THEN 'Between 2-3 hours'
+       ELSE 'More than 3 hours' END AS filmlen_groups
+FROM actor a
+JOIN film_actor fa ON a.actor_id = fa.actor_id
+JOIN film f ON fa.film_id = f.film_id
+ORDER BY 3;
+
+
+Now, we bring in the advanced SQL query concepts! Revise the query you wrote above to create a count of movies in each of the 4 filmlen_groups: 1 hour or less, Between 1-2 hours, Between 2-3 hours, More than 3 hours.
+
+** Match the count of movies in each filmlen_group.**
+
+SELECT t1.filmlen_groups, COUNT(*) filmcount_bylencat
+FROM
+(SELECT DISTINCT f.title, f.length, 
+CASE WHEN f.length <= 60 THEN '1 hour or less'
+       WHEN f.length > 60 AND f.length <= 120 THEN 'Between 1-2 hours'
+       WHEN f.length > 120 AND f.length <= 180 THEN 'Between 2-3 hours'
+       ELSE 'More than 3 hours' END AS filmlen_groups
+FROM film f
+)t1
+GROUP BY 1
+ORDER BY 1;
+
+or
+
+SELECT    DISTINCT(filmlen_groups),
+          COUNT(title) OVER (PARTITION BY filmlen_groups) AS filmcount_bylencat
+FROM  
+         (SELECT title,length,
+          CASE WHEN length <= 60 THEN '1 hour or less'
+          WHEN length > 60 AND length <= 120 THEN 'Between 1-2 hours'
+          WHEN length > 120 AND length <= 180 THEN 'Between 2-3 hours'
+          ELSE 'More than 3 hours' END AS filmlen_groups
+          FROM film ) t1
+ORDER BY  filmlen_groups;
+
+
